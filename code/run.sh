@@ -1,0 +1,19 @@
+python3.9 ./mpore_head_serial.py \
+--output-prefix test \
+--tube-radius 2.6 \
+--ion-radii 2.5 2.5 \
+--transfer-energy -0.95 -0.95 \
+--voltage 0.0 0.8 0.05 \
+--production-steps 2000 \
+--thermalization-steps 1000 \
+--pore-type cyl \
+--restart 0 \
+--temperature 300.0 \
+--eshift 0.0 \
+--epsr 2.5 \
+--tube-length 100.0 \
+--wall-atom-radius 0.0 \
+--stat-frequency 1000 \
+--restart-frequency 10000 \
+--prob-trans 0.5 \
+--prob-widom 0.9 
