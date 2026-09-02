@@ -5,7 +5,7 @@
 # Ivan Franko National University of Lviv
 # 
 # Adapted and modified by Vishnu Prasad Kurupath
-#
+# (https://vishnu-prasad-kurupath.github.io/)
 
 # Basic imports 
 import numpy as np
