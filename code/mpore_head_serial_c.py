@@ -1,3 +1,12 @@
+# Original code written by Taras Verkholyak, 
+# Institute for Condensed Matter Physics, 
+# National Academy of Sciences of Ukraine, 
+# and Andrij Kuzmak, Department for Theoretical Physics, 
+# Ivan Franko National University of Lviv
+# 
+# Adapted and modified by Vishnu Prasad Kurupath
+#
+ 
 import sys
 import os
 import numpy as np
