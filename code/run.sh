@@ -1,4 +1,4 @@
-python3.9 ./mpore_head_serial.py \
+python3.9 ./mpore_gcmc_head_serial.py \
 --output-prefix test \
 --tube-radius 2.6 \
 --ion-radii 2.5 2.5 \

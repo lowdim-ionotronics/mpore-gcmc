@@ -9,7 +9,7 @@
 
 import sys
 import numpy as np
-import mpore_serial as mpore
+import mpore_gcmc_serial as mpore_gcmc
 from argparse import ArgumentParser
 
 parser = ArgumentParser(fromfile_prefix_chars='@')
@@ -136,7 +136,7 @@ if args.restart and args.restart==1:
     pass
 else:
     print ("Restart (-R/--restart) not provided. The simulation will start from initialized atoms at half packing")
-    state = mpore.state(temp, epsr, aion, q, 
+    state = mpore_gcmc.state(temp, epsr, aion, q, 
                 ptype, 2*atube, Ltube, eshift, wall_atom_radius, 
                 n_therm, n_simul, p_trans, p_widom)
 
@@ -146,7 +146,7 @@ if u.size == 3:
 for voltage in u:
     if args.restart == 1:
         print('State loaded from restart file. The simulation will restart from the voltage: ', voltage)
-        state = mpore.pickle_load(prefix, voltage)
+        state = mpore_gcmc.pickle_load(prefix, voltage)
 
     if args.srh == 1 and voltage == u[0]:
         args.restart = 0
@@ -157,7 +157,7 @@ for voltage in u:
 
     print('Total (mu+ev) for ions', mu_comp)
 
-    mc_exec = mpore.mcfunctions(state)
+    mc_exec = mpore_gcmc.mcfunctions(state)
     if (not args.restart) or (args.restart==0):
         print('Thermalization Started')
         mc_exec.thermalization(mu_comp)

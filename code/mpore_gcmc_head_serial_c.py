@@ -10,7 +10,7 @@
 import sys
 import os
 import numpy as np
-import mpore_serial_c as mpore
+import mpore_gcmc_serial_c as mpore_gcmc
 from argparse import ArgumentParser
 
 parser = ArgumentParser(fromfile_prefix_chars='@')
@@ -138,14 +138,14 @@ if u.size != 3:
 else:
     print("Voltage range", u)
 
-state = mpore.state(temp, epsr, aion, q, 
+state = mpore_gcmc.state(temp, epsr, aion, q, 
                 ptype, 2*atube, Ltube, eshift, wall_atom_radius, 
                 n_therm, n_simul, p_trans, p_widom)
 
 if os.path.isfile('./cont.restart'):
-    state = mpore.pickle_load()
+    state = mpore_gcmc.pickle_load()
 
-mc_exec = mpore.mcfunctions(state)
+mc_exec = mpore_gcmc.mcfunctions(state)
 del state
 
 while mc_exec.state.c_voltage <= u[1]:
