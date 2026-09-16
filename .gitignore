@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# GCMC run output (produced by run_gcmc.py / run_gcmc_sweep.py)
+*.count
+*.coords
+*.restart
+
+*~
+.DS_Store
