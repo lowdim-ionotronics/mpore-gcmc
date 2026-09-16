@@ -1,47 +1,76 @@
 # mpore-gcmc
-GCMC simulation of slit and cylindrical metallic pores using Python
+GCMC simulation of slit and cylindrical metallic pores using mplib
 
 ## Introduction
 
-The mpore-gcmc package runs gcmc simulations of ions in both slit and cylindrical pore geometries. The ions are treated as hard-spheres with charge. The pore walls are modelled as homogenous surfaces and the particle energies are calculated using the [mplib library](https://github.com/lowdim-ionotronics/mplib). 
+The mpore-gcmc package runs GCMC simulations of ions in both slit and
+cylindrical pore geometries. The ions are treated as hard spheres with
+charge. The pore walls are modelled as homogeneous surfaces, and the
+particle energies are calculated using the [mplib
+library](https://github.com/lowdim-ionotronics/mplib).
 
-The gcmc simulations include,
-1. Translational moves 
-2. Widom insertion/deletion 
-3. Ion swap 
+The GCMC simulations include:
+1. Translational moves
+2. Widom insertion/deletion
+3. Ion swap
 
-each of whose relative probabilities can be specified during usage.
+each of whose relative probabilities can be specified during usage (see
+the [Notes](#notes) on `--prob-trans`/`--prob-widom` below -- they aren't
+what they look like at first glance).
 
-## Source Files
+## Installation
 
-The code is placed in the ```./code``` folder. 
+```
+pip install -e .
+```
 
-The files with ```"head"``` in their filename are the top-level files which accepts the simulation parameters and initializes the base classes and sets up the simulation. The files without ```"head"``` in their filename include all the base classes used for the simulation. 
+installs the `mpore_gcmc` library (needs `numpy`, `scipy`, pulled in
+automatically). This does **not** install `mplib_ctypes` -- that's a
+separate prerequisite from the sibling
+[mplib](https://github.com/lowdim-ionotronics/mplib) repo: build it
+(`./configure && make && make install` there) and make sure its install
+prefix's `lib/` is on `LD_LIBRARY_PATH` before running anything here.
 
-The files with ```"_c"``` in their filename (mpore_gcmc_head_serial_c.py + mpore_gcmc_serial_c.py) can be used to run simulations for a range of electrode potentials with a specified step size (eg: 0.0 to 8.0 with a step size of 0.5). Here the final gcmc configuration from the previous potential step is used as the initial configuration for the next step. The files without ```"_c"``` in their filename can only be used to run the simulations at a single electrode potential. 
+## Source files
 
-## Dependencies
+- `mpore_gcmc/__init__.py` -- the library: pore geometry (`pore`,
+  `cylinder`, `slit`), Monte Carlo machinery (`mc_settings`,
+  `mcfunctions`), simulation state (`state`), output helpers (`output`),
+  restart pickling (`pickle_write`/`pickle_load`), and the pore-width
+  consistency check (`resolve_pore_width`).
+- `run_gcmc.py` -- CLI driver for a **single voltage** run.
+- `run_gcmc_sweep.py` -- CLI driver for a **voltage sweep**: runs a range
+  of electrode potentials with a given step size (e.g. 0.0 to 0.8 V in
+  steps of 0.05 V), carrying the final configuration from each voltage
+  over as the initial configuration for the next. Automatically resumes
+  from `./cont.restart` if present in the working directory (see
+  [Notes](#notes)).
 
-- [mplib library](https://github.com/lowdim-ionotronics/mplib)
-- Generic Python libraries, specifically [Numpy](https://numpy.org/) and [Scipy](https://scipy.org/)
-
+Both CLI scripts parse arguments and hand off to the `mpore_gcmc` library
+-- neither defines any physics of its own.
 
 ## Usage
 
-Arguments can also be read from a file because the parser is configured with:
+Either pass parameters as command-line flags, or point `-C`/`--config` at
+a JSON file with the same field names as the long option names below
+(e.g. `{"pore_width_accessible": 6.0, "pore_type": "cyl", ...}`) -- JSON
+values fill in any option not given on the command line, so a CLI flag
+always overrides the same key in the config file. See
+`examples/jcp2026/*.json` for real examples.
 
-```python
-fromfile_prefix_chars='@'
+```
+python run_gcmc.py -C my_config.json
 ```
 
-Prefix the argument-file name with `@`:
+Command-line arguments can also be read from a file, since the parser is
+configured with `fromfile_prefix_chars='@'`:
 
-```bash
-python simulation.py @input_arguments.txt
+```
+python run_gcmc.py @input_arguments.txt
 ```
 
-The file should contain command-line arguments in the same format as a normal terminal invocation.
-
+The file should contain command-line arguments in the same format as a
+normal terminal invocation.
 
 ## Command-line options
 
@@ -49,8 +78,22 @@ The file should contain command-line arguments in the same format as a normal te
   - Default value: `"Case"`
   - Type: string
 
-- `-A`, `--tube-radius`: accessible tube radius (in Å)
-  - Required: yes
+- `-A`, `--pore-width-accessible`: accessible pore width (in Å) -- the
+  **diameter** for `--pore-type cyl`, the **gap width** for `--pore-type
+  slit`. This is the width available to ion centres, not the width to the
+  wall-atom/carbon centres (see `--pore-width-nominal`/`--wall-atom-radius`
+  below, and `KNOWN_ISSUES.md`).
+  - Provide this and/or `--pore-width-nominal`; at least one is required.
+  - Type: floating-point number
+
+- `--pore-width-nominal`: nominal pore width (in Å), to the
+  wall-atom/carbon centres (diameter for `cyl`, gap width for `slit`).
+  Related to `--pore-width-accessible` by `accessible = nominal -
+  2*wall_atom_radius` (for **both** pore types -- see `--wall-atom-radius`
+  below for why the factor is the same `2*` for a slit's two walls and a
+  cylinder's one wall). If both `--pore-width-accessible` and
+  `--pore-width-nominal` are given, they must be consistent with
+  `--wall-atom-radius` or the program exits with an error.
   - Type: floating-point number
 
 - `-a`, `--ion-radii`: ion radii (in Å)
@@ -58,12 +101,23 @@ The file should contain command-line arguments in the same format as a normal te
   - Type: one or more floating-point numbers
   - At least two ion radii must be supplied.
 
-- `-w`, `--transfer-energy`: transfer energy for each particle type (in eV)
+- `-w`, `--mu-bulk`: bulk chemical potential for each particle type (in
+  eV) -- the free-energy cost of transferring an ion from the bulk
+  reservoir into the pore, before any electrostatic (voltage) term is
+  added.
   - Required: yes
   - Type: one or more floating-point numbers
 
-- `-u`, `--voltage`: voltage range start, stop, and step (in V) for files with `_c`in their file name. Provide a single value otherwise.
-  - Default value: `[0.0, 0.8, 0.05]` when the supplied range does not contain exactly three values when using files with `_c`in their filename. The other files throws an error in this option is unspecified. 
+- `-u`, `--voltage`: one or more voltages (in V). **Required in both
+  `run_gcmc.py` and `run_gcmc_sweep.py`** -- omitting it exits with an
+  error in either script.
+  - If exactly three values are given, they're interpreted as `start
+    stop step` and expanded into a range via `numpy.arange` -- this
+    applies to **both** scripts, not just `run_gcmc_sweep.py`.
+  - If a different count of values is given: `run_gcmc_sweep.py` falls
+    back to the default range `[0.0, 0.8, 0.05]`; `run_gcmc.py` instead
+    loops over exactly the voltages given (e.g. `-u 0.1 0.3 0.7` simulates
+    precisely those three voltages, not a range).
   - Type: one or more floating-point numbers
 
 - `-n`, `--production-steps`: number of Monte Carlo production steps
@@ -77,12 +131,28 @@ The file should contain command-line arguments in the same format as a normal te
 - `-P`, `--pore-type`: pore type: `cyl` or `slit`
   - Required: yes
   - Type: string
+  - Validated: any other value raises an error (it used to silently run
+    as `slit` -- see `KNOWN_ISSUES.md`).
+
+- `-R`, `--restart` (`run_gcmc.py` only): `1` to resume from a restart
+  file matching `--output-prefix`; omit or `0` to start fresh. Not
+  available in `run_gcmc_sweep.py` (see [Notes](#notes) for how that one
+  restarts instead).
+  - Default value: not set (fresh start)
+  - Type: integer (0 or 1)
+
+- `-srh`, `--skip-restart-head` (`run_gcmc.py` only): `1` to skip the
+  first voltage in the list when restarting (the restart file read still
+  corresponds to that first voltage).
+  - Default value: not set
+  - Type: integer (0 or 1)
 
 - `-T`, `--temperature`: temperature in K
   - Required: yes
   - Type: floating-point number
 
-- `-e`, `--eshift`: distance (in Å) to shift the electron centre from the pore-atom centre
+- `-e`, `--eshift`: distance (in Å) to shift the electron centre from the
+  pore-atom centre
   - Default value: `0.0`
   - Type: floating-point number
 
@@ -90,11 +160,15 @@ The file should contain command-line arguments in the same format as a normal te
   - Default value: `2.5`
   - Type: floating-point number
 
-- `-L`, `--tube-length`: length of the tube; for a slit pore, this is the slit size
+- `-L`, `--pore-length`: periodic simulation length (in Å) -- the
+  cylinder axial length for `--pore-type cyl`, the square lateral box
+  side length for `--pore-type slit`.
   - Default value: `100.0`
   - Type: floating-point number
 
-- `-W`, `--wall-atom-radius`: radius of wall atoms to reduce from the pore width
+- `-W`, `--wall-atom-radius`: radius of wall atoms (in Å; e.g. the carbon
+  radius for a CNT), relating `--pore-width-accessible` and
+  `--pore-width-nominal`.
   - Default value: `0.0`
   - Type: floating-point number
 
@@ -110,37 +184,100 @@ The file should contain command-line arguments in the same format as a normal te
   - Default value: `None` (coordinate dumping is disabled)
   - Type: floating-point number
 
-- `-pt`, `--prob-trans`: probability for Monte Carlo translation moves
+- `-pt`, `--prob-trans`: Monte Carlo move-selection threshold for
+  translation moves. See [Notes](#notes) -- this is a cumulative
+  threshold, not a standalone probability.
   - Default value: `0.5`
   - Type: floating-point number
 
-- `-pw`, `--prob-widom`: probability for Monte Carlo Widom moves
+- `-pw`, `--prob-widom`: Monte Carlo move-selection threshold up to and
+  including Widom insertion/deletion moves. See [Notes](#notes).
   - Default value: `1.0`
   - Type: floating-point number
 
-## Example Usage
+- `-C`, `--config`: JSON file of parameters, using the same field names as
+  the long option names above. Supplies a default for any option not
+  given on the command line; explicit CLI flags always take precedence.
+  - Type: string (file path)
+
+## Example usage
 
 ```bash
-python simulation.py \
+python run_gcmc.py -C examples/jcp2026/cyl_wpore6.json
+```
+
+or, entirely via CLI flags:
+
+```bash
+python run_gcmc.py \
   --output-prefix Case01 \
-  --tube-radius 12.0 \
+  --pore-width-accessible 24.0 \
   --ion-radii 1.8 2.0 \
-  --transfer-energy -0.25 -0.25 \
+  --mu-bulk -0.25 -0.25 \
   --voltage 0.0 0.8 0.05 \
   --production-steps 1000000 \
   --thermalization-steps 500000 \
   --pore-type cyl \
   --temperature 300.0 \
-  --tube-length 100.0
+  --pore-length 100.0
 ```
 
 ## Notes
 
-- `--tube-radius`, `--ion-radii`, `--transfer-energy`, `--voltage`, `--pore-type`, and `--temperature` are effectively required. The program prints an error message and exits if they are not provided.
-- `--voltage` must contain exactly three values: `start`, `stop`, and `step`. If the provided array does not have three values, the script replaces it with `[0.0, 0.8, 0.05]` when you are using the code with `_c` in their file name.
-- Supply ion radii and transfer energies as space-separated values after their respective options.
-- The first two ion species are assigned charges `-1` and `+1`. Any additional ion species are assigned charge `0`.
-- The code writes resart files containing configurations at each `--restart-frequency` step. Running the original command in the presence of `.restart` file inside the run folder will restart the simulations from their saved configuration.  
+- `--pore-width-accessible` (or `--pore-width-nominal`), `--ion-radii`,
+  `--mu-bulk`, `--voltage`, `--pore-type`, and `--temperature` are
+  effectively required. The program prints an error message and exits if
+  they are not provided.
+- `--voltage` must contain exactly three values (`start`, `stop`, `step`)
+  to be treated as a range -- see the full behavior under
+  `-u`/`--voltage` above; it differs between the two scripts.
+- Supply ion radii and chemical potentials as space-separated values
+  after their respective options.
+- The first two ion species are assigned charges `-1` and `+1`. Any
+  additional ion species are assigned charge `0`.
+- **`--prob-trans`/`--prob-widom` are cumulative thresholds inside a
+  single random draw** (`mc_step()` picks translation if
+  `rand < prob_trans`, Widom insertion/deletion if `prob_trans <= rand <
+  prob_widom`, and a swap move otherwise) -- not the three independent
+  probabilities the option names suggest. To get standalone probabilities
+  translation=0.5, Widom=0.4, swap=0.1 (as used for the paper's Fig. 2,
+  `pore_geom/main.tex:179`), pass `--prob-trans 0.5 --prob-widom 0.9`
+  (`0.5 + 0.4`), not `--prob-widom 0.4`.
+- Restart behavior differs between the two scripts:
+  - `run_gcmc.py`: restart is **not** automatic. Pass `-R 1` explicitly to
+    resume from `<output-prefix>_<voltage>.restart`; without it, a fresh
+    simulation always starts, even if a matching restart file exists.
+  - `run_gcmc_sweep.py`: restart **is** automatic -- if `./cont.restart`
+    exists in the run directory, the simulation resumes from it (this
+    check is independent of `--output-prefix`). A per-voltage snapshot
+    `v_<voltage>.restart` is also written after each voltage step
+    completes.
+  - In both cases, restart files are written periodically (every
+    `--restart-frequency` steps) and once more at the end of each
+    voltage's run.
+
+## Output files
+
+- `<prefix>_<voltage>.count`: appended every `--stat-frequency` steps --
+  one row of per-species particle counts (a histogram over the ion
+  species) per write.
+- `<prefix>_<voltage>.coords`: appended every `--coords-frequency` steps
+  (only if `-c`/`--coords-frequency` is given) -- each block starts with
+  a `step:<i_step>` header line followed by `[ion_type, x, y, z]` rows for
+  every ion.
+- `<prefix>_<voltage>.restart` (`run_gcmc.py`) / `./cont.restart` and
+  `v_<voltage>.restart` (`run_gcmc_sweep.py`): pickled simulation state,
+  for resuming a run (see Notes above).
+
+## Known issues
+
+See [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for a confinement bug found and
+fixed while preparing this repo for public release, and a caveat about
+unused (but present) charge/capacitance unit-conversion helpers.
+
+## License
+
+GPLv3 -- see [`LICENSE`](LICENSE).
 
 ## Acknowledgements
 
