@@ -1,0 +1,20 @@
+{
+  "output_prefix": "test",
+  "pore_width_accessible": 5.2,
+  "ion_radii": [2.5, 2.5],
+  "mu_bulk": [-0.95, -0.95],
+  "voltage": [0.0, 0.8, 0.05],
+  "production_steps": 2000,
+  "thermalization_steps": 1000,
+  "pore_type": "cyl",
+  "restart": 0,
+  "temperature": 300.0,
+  "eshift": 0.0,
+  "epsr": 2.5,
+  "pore_length": 100.0,
+  "wall_atom_radius": 0.0,
+  "stat_frequency": 1000,
+  "restart_frequency": 10000,
+  "prob_trans": 0.5,
+  "prob_widom": 0.9
+}
