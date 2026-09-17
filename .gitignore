@@ -9,5 +9,9 @@ dist/
 *.coords
 *.restart
 
+# analyze_gcmc.py output
+*_analysis.dat
+*_profile.dat
+
 *~
 .DS_Store

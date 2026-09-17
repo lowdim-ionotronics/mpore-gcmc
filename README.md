@@ -45,6 +45,9 @@ prefix's `lib/` is on `LD_LIBRARY_PATH` before running anything here.
   over as the initial configuration for the next. Automatically resumes
   from `./cont.restart` if present in the working directory (see
   [Notes](#notes)).
+- `analyze_gcmc.py` -- post-processes either script's output into
+  charge/capacitance/density/energy vs. voltage, and optional
+  density profiles (see [Analysis](#analysis)).
 
 Both CLI scripts parse arguments and hand off to the `mpore_gcmc` library
 -- neither defines any physics of its own.
@@ -268,6 +271,33 @@ python run_gcmc.py \
 - `<prefix>_<voltage>.restart` (`run_gcmc.py`) / `./cont.restart` and
   `v_<voltage>.restart` (`run_gcmc_sweep.py`): pickled simulation state,
   for resuming a run (see Notes above).
+
+## Analysis
+
+`analyze_gcmc.py` computes accumulated charge, differential capacitance,
+ion density, and stored energy vs. voltage from a run's `.count` files,
+plus an optional z-density (slit) or radial-density (cyl) profile from
+`.coords` files. It reads the *same* `-C/--config` JSON used to launch
+the run, so pore geometry and ion charges don't need to be re-supplied:
+
+```
+python analyze_gcmc.py -C my_config.json --profile
+```
+
+writes `<prefix>_analysis.dat` (one row per voltage found for that
+prefix, columns documented in the file's own header along with units and
+the resolved parameter set) and, with `--profile`,
+`<prefix>_<voltage>_profile.dat` per voltage with a `.coords` file.
+Units mirror `single-file`: charge in µC/cm², capacitance in µF/cm²,
+using the accessible pore radius for the surface-area normalization
+(cylinder) or the flat wall area (slit). The reported energy,
+`E_pore(u) = ∫₀ᵘC(u')u'du'` (µJ/cm²), is the single pore/electrode
+stored energy. For a *symmetric* EDLC (identical electrodes, symmetric
+electrolyte), the full-cell energy at cell voltage `v=2u` is
+`2×E_pore(u)` -- not computed here, since that assumption doesn't hold
+for arbitrary (e.g. asymmetric `--ion-radii`) runs. See the script's
+module docstring for a caveat about the charge/capacitance normalization
+prefactors not yet being validated against a known reference.
 
 ## Known issues
 
