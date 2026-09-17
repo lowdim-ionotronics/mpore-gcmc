@@ -5,10 +5,22 @@
 # Adapted and modified by Vishnu Prasad Kurupath
 # (https://vishnu-prasad-kurupath.github.io/)
 #
-# Single-voltage GCMC runner. For a voltage sweep with configuration
-# carried over between steps, see run_gcmc_sweep.py.
+# GCMC runner: one voltage, an explicit list, or a range (three
+# -u/--voltage values are expanded via numpy.arange). The ion
+# configuration carries over between voltages within one invocation.
+#
+# Two independent, mutually exclusive resume mechanisms:
+#   -R/--restart 1        reload a specific <prefix>_<voltage>.restart on
+#                          every iteration (e.g. to deliberately re-run or
+#                          extend one saved voltage).
+#   --auto-resume          auto-detect ./cont.restart at startup and figure
+#                          out where in the voltage list to resume, with
+#                          fine-grained mid-thermalization/mid-production
+#                          checkpointing -- for long unattended runs on a
+#                          cluster that may get killed and resubmitted.
 
 import sys
+import os
 import json
 import numpy as np
 import mpore_gcmc
@@ -26,6 +38,7 @@ parser.add_argument("-t", "--thermalization-steps", help="number of MC steps for
 parser.add_argument("-P", "--pore-type", help="pore type: cyl/slit", metavar="VAL", type=str, dest="pore_type")
 parser.add_argument("-R", "--restart", help="restart: 1 for resuming from restart file. output-prefix of the file to be read should be the same as the one provided", metavar="BOOL", type=int, dest="restart")
 parser.add_argument("-srh", "--skip-restart-head", help="skip-restart-head: 1 to skip first voltage in the list (but the restart file read will correspond to the first voltage)", metavar="BOOL", type=int, dest="skip_restart_head")
+parser.add_argument("--auto-resume", help="auto-detect ./cont.restart at startup and resume the voltage list from there, with fine-grained mid-thermalization/mid-production checkpointing. Mutually exclusive with -R/--restart", action="store_true", default=None, dest="auto_resume")
 parser.add_argument("-T", "--temperature", help="temp in K", metavar="VAL", type=float, dest="temperature")
 parser.add_argument("-e", "--eshift", help="distance (in Angs) to shift electron center from pore atom center", metavar="VAL", type=float, dest="eshift")
 parser.add_argument("-p", "--epsr", help="permittivity of medium", metavar="VAL", type=float, dest="epsr")
@@ -145,7 +158,24 @@ if args.prob_widom is not None:
 else:
     print("Widom probability (-pw/--prob-widom) not provided. Defaulting to 1.0")
     p_widom = 1.0
-if args.restart and args.restart == 1:
+if args.auto_resume and args.restart:
+    print("--auto-resume and -R/--restart cannot be used together")
+    sys.exit(1)
+
+if u.size == 3:
+    u = np.arange(u[0], u[1], u[2])
+
+start_idx = 0
+if args.auto_resume:
+    if os.path.isfile('./cont.restart'):
+        state = mpore_gcmc.pickle_load('./cont.restart')
+        start_idx = int(np.argmin(np.abs(u - state.c_voltage)))
+        print('State loaded from ./cont.restart. Resuming from voltage:', u[start_idx])
+    else:
+        state = mpore_gcmc.state(temp, epsr, aion, q,
+                    ptype, pore_width_accessible, Ltube, eshift, wall_atom_radius,
+                    n_therm, n_simul, p_trans, p_widom)
+elif args.restart and args.restart == 1:
     pass
 else:
     print("Restart (-R/--restart) not provided. The simulation will start from initialized atoms at half packing")
@@ -153,27 +183,45 @@ else:
                 ptype, pore_width_accessible, Ltube, eshift, wall_atom_radius,
                 n_therm, n_simul, p_trans, p_widom)
 
-if u.size == 3:
-    u = np.arange(u[0], u[1], u[2])
+for i in range(start_idx, len(u)):
+    voltage = u[i]
 
-for voltage in u:
-    if args.restart == 1:
-        print('State loaded from restart file. The simulation will restart from the voltage: ', voltage)
-        state = mpore_gcmc.pickle_load(f'{prefix}_{voltage}.restart')
+    if args.auto_resume:
+        state.c_voltage = voltage
+        if state.mcparams.complete == 0:
+            ueV = voltage / state.factor_kBT_to_eV
+            mu_comp = w / state.factor_kBT_to_eV + state.q_comp * ueV
 
-    if args.skip_restart_head == 1 and voltage == u[0]:
+            print('Voltage:', voltage)
+            print('Total (mu+ev) for ions', mu_comp)
+
+            mc_exec = mpore_gcmc.mcfunctions(state)
+            print('Thermalization started from', state.mcparams.c_therm)
+            mc_exec.thermalization(mu_comp, restart_freq, continuation=True)
+            print('Thermalization ended')
+
+            print('Production started from', state.mcparams.c_sim)
+            mc_exec.mc_simulate(mu_comp, stat_freq, prefix, voltage, coord_dump, restart_freq, continuation=True)
+            print('Production ended')
+        state.mcparams.complete = 0
+    else:
+        if args.restart == 1:
+            print('State loaded from restart file. The simulation will restart from the voltage: ', voltage)
+            state = mpore_gcmc.pickle_load(f'{prefix}_{voltage}.restart')
+
+        if args.skip_restart_head == 1 and voltage == u[0]:
+            args.restart = 0
+            continue
+
+        ueV = voltage / state.factor_kBT_to_eV
+        mu_comp = w / state.factor_kBT_to_eV + state.q_comp * ueV
+
+        print('Total (mu+ev) for ions', mu_comp)
+
+        mc_exec = mpore_gcmc.mcfunctions(state)
+        if (not args.restart) or (args.restart == 0):
+            print('Thermalization Started')
+            mc_exec.thermalization(mu_comp)
+            print('Thermalization Ends')
         args.restart = 0
-        continue
-
-    ueV = voltage / state.factor_kBT_to_eV
-    mu_comp = w / state.factor_kBT_to_eV + state.q_comp * ueV
-
-    print('Total (mu+ev) for ions', mu_comp)
-
-    mc_exec = mpore_gcmc.mcfunctions(state)
-    if (not args.restart) or (args.restart == 0):
-        print('Thermalization Started')
-        mc_exec.thermalization(mu_comp)
-        print('Thermalization Ends')
-    args.restart = 0
-    mc_exec.mc_simulate(mu_comp, stat_freq, prefix, voltage, coord_dump, restart_freq)
+        mc_exec.mc_simulate(mu_comp, stat_freq, prefix, voltage, coord_dump, restart_freq)

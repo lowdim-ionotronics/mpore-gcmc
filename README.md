@@ -38,14 +38,12 @@ prefix's `lib/` is on `LD_LIBRARY_PATH` before running anything here.
   `mcfunctions`), simulation state (`state`), output helpers (`output`),
   restart pickling (`pickle_write`/`pickle_load`), and the pore-width
   consistency check (`resolve_pore_width`).
-- `run_gcmc.py` -- CLI driver for a **single voltage** run.
-- `run_gcmc_sweep.py` -- CLI driver for a **voltage sweep**: runs a range
-  of electrode potentials with a given step size (e.g. 0.0 to 0.8 V in
-  steps of 0.05 V), carrying the final configuration from each voltage
-  over as the initial configuration for the next. Automatically resumes
-  from `./cont.restart` if present in the working directory (see
-  [Notes](#notes)).
-- `analyze_gcmc.py` -- post-processes either script's output into
+- `run_gcmc.py` -- CLI driver: one voltage, an explicit list, or a range
+  (three `-u/--voltage` values are expanded into `start,stop,step` via
+  `numpy.arange`). The ion configuration carries over between voltages
+  within one invocation. Two independent resume mechanisms are available
+  for long runs -- see [Notes](#notes).
+- `analyze_gcmc.py` -- post-processes `run_gcmc.py`'s output into
   charge/capacitance/density/energy vs. voltage, and optional
   density profiles (see [Analysis](#analysis)).
 
@@ -113,16 +111,13 @@ normal terminal invocation.
   - Required: yes
   - Type: one or more floating-point numbers
 
-- `-u`, `--voltage`: one or more voltages (in V). **Required in both
-  `run_gcmc.py` and `run_gcmc_sweep.py`** -- omitting it exits with an
-  error in either script.
+- `-u`, `--voltage`: one or more voltages (in V). Required -- omitting it
+  exits with an error.
   - If exactly three values are given, they're interpreted as `start
-    stop step` and expanded into a range via `numpy.arange` -- this
-    applies to **both** scripts, not just `run_gcmc_sweep.py`.
-  - If a different count of values is given: `run_gcmc_sweep.py` falls
-    back to the default range `[0.0, 0.8, 0.05]`; `run_gcmc.py` instead
-    loops over exactly the voltages given (e.g. `-u 0.1 0.3 0.7` simulates
-    precisely those three voltages, not a range).
+    stop step` and expanded into a range via `numpy.arange`.
+  - If a different count of values is given, they're used literally, in
+    order (e.g. `-u 0.1 0.3 0.7` simulates precisely those three
+    voltages, not a range).
   - Type: one or more floating-point numbers
 
 - `-n`, `--production-steps`: number of Monte Carlo production steps
@@ -138,14 +133,21 @@ normal terminal invocation.
   - Type: string
   - Validated: any other value raises an error.
 
-- `-R`, `--restart` (`run_gcmc.py` only): `1` to resume from a restart
-  file matching `--output-prefix`; omit or `0` to start fresh. Not
-  available in `run_gcmc_sweep.py` (see [Notes](#notes) for how that one
-  restarts instead).
+- `-R`, `--restart`: `1` to resume from a restart file matching
+  `--output-prefix`; omit or `0` to start fresh. Mutually exclusive with
+  `--auto-resume` (see [Notes](#notes) for the difference between the two).
   - Default value: not set (fresh start)
   - Type: integer (0 or 1)
 
-- `-srh`, `--skip-restart-head` (`run_gcmc.py` only): `1` to skip the
+- `--auto-resume`: auto-detect `./cont.restart` at startup and resume the
+  voltage list from there, with fine-grained mid-thermalization/
+  mid-production checkpointing -- for long unattended runs that may get
+  killed and resubmitted. Mutually exclusive with `-R`/`--restart` (see
+  [Notes](#notes)).
+  - Default value: off
+  - Type: flag (no value)
+
+- `-srh`, `--skip-restart-head`: `1` to skip the
   first voltage in the list when restarting (the restart file read still
   corresponds to that first voltage).
   - Default value: not set
@@ -234,7 +236,7 @@ python run_gcmc.py \
   they are not provided.
 - `--voltage` must contain exactly three values (`start`, `stop`, `step`)
   to be treated as a range -- see the full behavior under
-  `-u`/`--voltage` above; it differs between the two scripts.
+  `-u`/`--voltage` above.
 - Supply ion radii and chemical potentials as space-separated values
   after their respective options.
 - The first two ion species are assigned charges `-1` and `+1`. Any
@@ -247,16 +249,19 @@ python run_gcmc.py \
   translation=0.5, Widom=0.4, swap=0.1 (as used for the paper's Fig. 2,
   `pore_geom/main.tex:179`), pass `--prob-trans 0.5 --prob-widom 0.9`
   (`0.5 + 0.4`), not `--prob-widom 0.4`.
-- Restart behavior differs between the two scripts:
-  - `run_gcmc.py`: restart is **not** automatic. Pass `-R 1` explicitly to
-    resume from `<output-prefix>_<voltage>.restart`; without it, a fresh
+- Two independent resume mechanisms, not to be combined:
+  - Plain (neither flag given): restart is **not** automatic -- a fresh
     simulation always starts, even if a matching restart file exists.
-  - `run_gcmc_sweep.py`: restart **is** automatic -- if `./cont.restart`
-    exists in the run directory, the simulation resumes from it (this
-    check is independent of `--output-prefix`). A per-voltage snapshot
-    `v_<voltage>.restart` is also written after each voltage step
-    completes.
-  - In both cases, restart files are written periodically (every
+  - `-R 1`: resume from a specific, manually-named
+    `<output-prefix>_<voltage>.restart` on every voltage in the list
+    (e.g. to deliberately re-run or extend one saved voltage).
+  - `--auto-resume`: resume is automatic -- if `./cont.restart` exists in
+    the run directory, the simulation resumes from it (independent of
+    `--output-prefix`) and figures out where in the voltage list to pick
+    up, with fine-grained mid-thermalization/mid-production
+    checkpointing. A per-voltage snapshot `v_<voltage>.restart` is also
+    written after each voltage completes.
+  - In all cases, restart files are written periodically (every
     `--restart-frequency` steps) and once more at the end of each
     voltage's run.
 
@@ -269,9 +274,9 @@ python run_gcmc.py \
   (only if `-c`/`--coords-frequency` is given) -- each block starts with
   a `step:<i_step>` header line followed by `[ion_type, x, y, z]` rows for
   every ion.
-- `<prefix>_<voltage>.restart` (`run_gcmc.py`) / `./cont.restart` and
-  `v_<voltage>.restart` (`run_gcmc_sweep.py`): pickled simulation state,
-  for resuming a run (see Notes above).
+- `<prefix>_<voltage>.restart` (`-R`) / `./cont.restart` and
+  `v_<voltage>.restart` (`--auto-resume`): pickled simulation state, for
+  resuming a run (see Notes above).
 
 ## Analysis
 

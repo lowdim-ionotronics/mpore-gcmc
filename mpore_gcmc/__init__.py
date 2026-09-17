@@ -6,8 +6,8 @@
 # (https://vishnu-prasad-kurupath.github.io/)
 #
 # Merged from the formerly-duplicated mpore_gcmc_serial.py /
-# mpore_gcmc_serial_c.py into a single library used by both run_gcmc.py
-# (single voltage) and run_gcmc_sweep.py (voltage sweep/continuation).
+# mpore_gcmc_serial_c.py into a single library used by run_gcmc.py
+# (plain voltage loop, or --auto-resume for fine-grained checkpointing).
 # Ion confinement (volume_free/box_bound/random_position) uses the
 # accessible radius (Rex), not the wall-atom/carbon-centre radius (Rc) --
 # one of the two pre-merge files got this wrong; see analyze_gcmc.py for
@@ -227,8 +227,9 @@ class mc_settings(object):
     def __init__(self, Ntherm=1000000, Nsim=1000000):
         self.n_therm = Ntherm
         self.n_sim = Nsim
-        # Continuation/resume bookkeeping -- only meaningfully driven by
-        # run_gcmc_sweep.py; harmless no-ops (stay at 0) for run_gcmc.py.
+        # Continuation/resume bookkeeping -- only meaningfully driven when
+        # run_gcmc.py is run with --auto-resume; harmless no-ops (stay at
+        # 0) otherwise.
         self.c_therm = 0
         self.c_sim = 0
         self.complete = 0
@@ -340,7 +341,7 @@ class state(object):
 
         self.output = output()
 
-        # Only meaningfully driven by run_gcmc_sweep.py's voltage loop.
+        # Only meaningfully driven by run_gcmc.py's --auto-resume loop.
         self.c_voltage = 0.0
 
     def kBT2eV(self, T):
