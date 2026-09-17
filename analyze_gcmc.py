@@ -100,11 +100,13 @@ def pore_volume_A3(pore_obj, ptype):
 
 def find_count_files(prefix):
     """Return [(voltage, path), ...] sorted by voltage, for every
-    <prefix>_<voltage>.count file present in the current directory."""
+    <prefix>_<voltage>.count file present in the current directory
+    (prefix may itself include a directory component, e.g. 'out/run')."""
     pattern = f"{prefix}_*.count"
+    prefix_basename = os.path.basename(prefix)
     found = []
     for path in glob.glob(pattern):
-        m = re.fullmatch(re.escape(prefix) + r"_(.+)\.count", os.path.basename(path))
+        m = re.fullmatch(re.escape(prefix_basename) + r"_(.+)\.count", os.path.basename(path))
         if m:
             try:
                 voltage = float(m.group(1))
@@ -189,6 +191,11 @@ def main():
                          help="output-prefix to read <prefix>_<voltage>.count "
                               "(and, with --profile, .coords) files for; "
                               "defaults to the config's own output_prefix")
+    parser.add_argument("-d", "--output-dir", metavar="DIR",
+                         help="directory the run's output files live in (and "
+                              "where this script's own output is written); "
+                              "defaults to the config's own output_dir, else "
+                              "the current directory")
     parser.add_argument("--out", metavar="FILE",
                          help="analysis output file; defaults to "
                               "<prefix>_analysis.dat")
@@ -201,7 +208,14 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+
+    output_dir = args.output_dir or cfg.get('output_dir')
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        os.chdir(output_dir)
+
     prefix = args.output_prefix or cfg.get('output_prefix', 'Case')
+    prefix_basename = os.path.basename(prefix)
     ptype = cfg['pore_type']
 
     pore_obj, aion, d_ion_A, q_comp = build_pore(cfg)
@@ -263,7 +277,7 @@ def main():
             print(f"--profile requested but no {prefix}_*.coords files found "
                   "(the run needs -c/--coords-frequency set to produce them).")
         for path in coords_files:
-            m = re.fullmatch(re.escape(prefix) + r"_(.+)\.coords", os.path.basename(path))
+            m = re.fullmatch(re.escape(prefix_basename) + r"_(.+)\.coords", os.path.basename(path))
             voltage = m.group(1) if m else "unknown"
             frames = read_coords_frames(path)
             centers, mean_hist = compute_profile(pore_obj, ptype, frames, args.profile_bins)

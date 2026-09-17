@@ -28,6 +28,7 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser(fromfile_prefix_chars='@')
 parser.add_argument("-o", "--output-prefix", help="output file prefix", metavar="FILE", type=str, dest="output_prefix")
+parser.add_argument("-d", "--output-dir", help="directory to write output files into (created if missing); defaults to the current directory", metavar="DIR", type=str, dest="output_dir")
 parser.add_argument("-A", "--pore-width-accessible", help="accessible pore width in A -- diameter for --pore-type cyl, gap width for --pore-type slit -- i.e. the width available to ion centres", type=float, metavar="VAL", dest="pore_width_accessible")
 parser.add_argument("--pore-width-nominal", help="nominal pore width in A, to the wall-atom/carbon centres (diameter for cyl, gap width for slit). Provide this and/or --pore-width-accessible; consistent with --wall-atom-radius or an error is raised", type=float, metavar="VAL", dest="pore_width_nominal")
 parser.add_argument("-a", "--ion-radii", help="ion radii (in A)", type=float, metavar="A1, A2, ...", dest="ion_radii", nargs='+')
@@ -60,6 +61,10 @@ if args.config:
             continue
         if getattr(args, key, None) is None:
             setattr(args, key, value)
+
+if args.output_dir:
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.chdir(args.output_dir)
 
 if args.output_prefix is not None:
     prefix = args.output_prefix

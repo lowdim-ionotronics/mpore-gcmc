@@ -1,5 +1,6 @@
 {
   "output_prefix": "test",
+  "output_dir": "output",
   "pore_width_accessible": 5.2,
   "ion_radii": [2.5, 2.5],
   "mu_bulk": [-0.95, -0.95],

@@ -8,6 +8,13 @@ diameters 6/8/10 Å, cylindrical and slit) from our upcoming JCP2026 paper
 python run_gcmc.py -C examples/jcp2026/cyl_wpore6.json
 ```
 
+Each config's `output_dir` sends its output (`.count`/`.restart`) into
+`examples/jcp2026/output/`, created automatically. Analyze with, e.g.:
+
+```
+python analyze_gcmc.py -C examples/jcp2026/cyl_wpore6.json
+```
+
 Each JSON's `_source` field documents exactly which `main.tex` line
 numbers each parameter came from, and the `prob_trans`/`prob_widom`
 cumulative-threshold convention (see `run_gcmc.py --help` or the main

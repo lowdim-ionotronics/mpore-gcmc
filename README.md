@@ -79,6 +79,14 @@ normal terminal invocation.
   - Default value: `"Case"`
   - Type: string
 
+- `-d`, `--output-dir`: directory to write output files into (created if
+  missing, via `chdir` -- so this also scopes `--auto-resume`'s
+  `./cont.restart` auto-detection to this directory rather than the
+  invocation's own working directory). `analyze_gcmc.py` takes the same
+  option, reading/writing in the same directory.
+  - Default value: not set (current directory)
+  - Type: string (directory path)
+
 - `-A`, `--pore-width-accessible`: accessible pore width (in Å) -- the
   **diameter** for `--pore-type cyl`, the **gap width** for `--pore-type
   slit`. This is the width available to ion centres, not the width to the

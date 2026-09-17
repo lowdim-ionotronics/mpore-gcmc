@@ -1,6 +1,7 @@
 {
   "_source": "Reproduces the GCMC curves for w_pore=6A in fig:1D_vs_2D panels (d)-(f) of the JCP2026 paper (pore_geom/main.tex). Parameters from main.tex:101,140,175,179,222 and sm.tex:60 (carbon radius). Voltage range 0.0-0.85V (step 0.05) matches the paper's own electrode-potential axis clip u in [-0.01, 0.9] (figures-src/1d_vs_2d/charge_cap_energy.jl:104-113); the underlying fine-grid GCMC data extends to u=0.75 before jumping to coarser points used for a different SM figure. prob_trans/prob_widom are cumulative mc_step() thresholds, not standalone probabilities: main.tex:179 states move probabilities trans=0.5, widom=0.4, swap=0.1, which is prob_trans=0.5, prob_widom=0.5+0.4=0.9 here. Thermalization/production steps here are a small illustrative demo, NOT the paper's publication-quality values (main.tex:179: 1e6 equilibration, 1e7-1e8 production) -- bump thermalization_steps/production_steps to reproduce the paper.",
   "output_prefix": "slit_wpore6",
+  "output_dir": "output",
   "pore_type": "slit",
   "pore_width_accessible": 6.0,
   "pore_width_nominal": 9.37,
