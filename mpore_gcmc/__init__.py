@@ -8,8 +8,10 @@
 # Merged from the formerly-duplicated mpore_gcmc_serial.py /
 # mpore_gcmc_serial_c.py into a single library used by both run_gcmc.py
 # (single voltage) and run_gcmc_sweep.py (voltage sweep/continuation).
-# See KNOWN_ISSUES.md for the Rc/Rex confinement bug found and fixed
-# during this merge, and the C_coeff/q_coeff caveat.
+# Ion confinement (volume_free/box_bound/random_position) uses the
+# accessible radius (Rex), not the wall-atom/carbon-centre radius (Rc) --
+# one of the two pre-merge files got this wrong; see analyze_gcmc.py for
+# the (correctly Rex-based) charge/capacitance/energy normalization.
 
 import numpy as np
 import math
@@ -35,7 +37,7 @@ def resolve_pore_width(pore_width_accessible=None, pore_width_nominal=None,
     offset doubles when expressed as a width). If both are given, they
     must be consistent -- this is exactly the nominal-vs-accessible mixup
     that caused a real confinement bug in the pre-merge mpore_gcmc_serial.py
-    (see KNOWN_ISSUES.md). If only one is given, the other is derived.
+    (fixed above). If only one is given, the other is derived.
     """
     if pore_width_accessible is None and pore_width_nominal is None:
         raise ValueError(
@@ -90,11 +92,6 @@ class cylinder(pore):
         super().__init__(excl_width, length, eshift, wall_atom_radius)
 
         self.rho_factor = d_ion / self.length  # for 1D?? 3D vol_ion/vol_tube?
-        # NOTE: C_coeff/q_coeff use Rc (carbon/electronic-plane radius), not
-        # Rex (accessible radius). Confirmed unused anywhere in this
-        # library or the head scripts -- see KNOWN_ISSUES.md.
-        self.C_coeff = e_charge**2 / (2. * np.pi * self.Rc * 1.e-10 * d_ion * 1.e-10 * k_B * temp)
-        self.q_coeff = e_charge / (2. * np.pi * self.Rc * 1.e-10 * d_ion * 1.e-10)
 
         r_data, U1_data = mplib.cyl_u1_calc_array(self.Rel, self.Rex - np.min(aion), 200)
         self.u1_interpol = interpolate.interp1d(r_data, U1_data)
@@ -160,9 +157,6 @@ class slit(pore):
         super().__init__(excl_width, length, eshift, wall_atom_radius)
 
         self.rho_factor = (d_ion / self.length)**2
-        # NOTE: C_coeff/q_coeff use Rc, not Rex -- see KNOWN_ISSUES.md.
-        self.C_coeff = e_charge**2 / (d_ion * 1.e-10 * d_ion * 1.e-10 * k_B * temp)
-        self.q_coeff = e_charge / (d_ion * 1.e-10 * d_ion * 1.e-10)
 
         r_data, U1_data = mplib.slit_u1_calc_array(self.width_el, min(aion), 200)
         r_data = r_data - self.Rel

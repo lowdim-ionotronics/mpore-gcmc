@@ -85,7 +85,9 @@ normal terminal invocation.
   **diameter** for `--pore-type cyl`, the **gap width** for `--pore-type
   slit`. This is the width available to ion centres, not the width to the
   wall-atom/carbon centres (see `--pore-width-nominal`/`--wall-atom-radius`
-  below, and `KNOWN_ISSUES.md`).
+  below). This accessible-vs-nominal distinction is stated once in the
+  paper, in the MD methods subsection (`pore_geom/main.tex:123`) rather
+  than the GCMC one, as `\wpore = \wporei - 2\carbonr`.
   - Provide this and/or `--pore-width-nominal`; at least one is required.
   - Type: floating-point number
 
@@ -134,8 +136,7 @@ normal terminal invocation.
 - `-P`, `--pore-type`: pore type: `cyl` or `slit`
   - Required: yes
   - Type: string
-  - Validated: any other value raises an error (it used to silently run
-    as `slit` -- see `KNOWN_ISSUES.md`).
+  - Validated: any other value raises an error.
 
 - `-R`, `--restart` (`run_gcmc.py` only): `1` to resume from a restart
   file matching `--output-prefix`; omit or `0` to start fresh. Not
@@ -298,12 +299,6 @@ electrolyte), the full-cell energy at cell voltage `v=2u` is
 for arbitrary (e.g. asymmetric `--ion-radii`) runs. See the script's
 module docstring for a caveat about the charge/capacitance normalization
 prefactors not yet being validated against a known reference.
-
-## Known issues
-
-See [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for a confinement bug found and
-fixed while preparing this repo for public release, and a caveat about
-unused (but present) charge/capacitance unit-conversion helpers.
 
 ## License
 
